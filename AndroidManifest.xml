@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.operit.launcherblur"
+    android:versionCode="1"
+    android:versionName="1.0">
+
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="34" />
+
+    <application
+        android:label="LauncherBlur"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+
+        <meta-data android:name="xposedmodule" android:value="true" />
+        <meta-data android:name="xposeddescription"
+            android:value="桌面启动/退出应用时背景实时高斯模糊（Pixel Launcher，SurfaceControl background blur）" />
+        <meta-data android:name="xposedminversion" android:value="93" />
+        <meta-data android:name="xposedscope"
+            android:value="com.google.android.apps.nexuslauncher" />
+    </application>
+</manifest>
