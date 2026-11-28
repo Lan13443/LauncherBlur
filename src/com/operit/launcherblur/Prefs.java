@@ -28,6 +28,7 @@ public final class Prefs {
     int overview = 1;
     int overviewRadius = -1;
     int resumeBg = 0;
+    int noParallax = 1;
 
     Prefs() {}
 
@@ -70,6 +71,8 @@ public final class Prefs {
                     p.overviewRadius = v;
                 } else if ("resumeBg".equals(k)) {
                     p.resumeBg = v;
+                } else if ("noParallax".equals(k)) {
+                    p.noParallax = v;
                 }
             }
         } catch (Throwable t) {

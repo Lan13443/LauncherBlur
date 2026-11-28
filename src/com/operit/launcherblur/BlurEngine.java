@@ -172,6 +172,13 @@ public final class BlurEngine {
         attach(act);
         ensurePolling();
         Prefs p = mPrefs;
+        if (p.noParallax != 0) {
+            mLastAppliedNoParallax = 1;
+            applyFixedWallpaperOffset(null, act);
+        } else if (mLastAppliedNoParallax != 0) {
+            mLastAppliedNoParallax = 0;
+            syncWallpaperInterpolator();
+        }
         if (p.enabled == 0) {
             mArmed = false;
             mInOverviewBlur = false;
@@ -1286,7 +1293,14 @@ public final class BlurEngine {
                 public void onChange(boolean self) {
                     mPrefs = Prefs.load(mAppCtx);
                     mCurContent = -1;
-                    Log.i(TAG, "cfg reloaded: enabled=" + mPrefs.enabled + " radius=" + mPrefs.radius);
+                    Log.i(TAG, "cfg reloaded: enabled=" + mPrefs.enabled + " radius=" + mPrefs.radius + " noParallax=" + mPrefs.noParallax);
+                    if (mPrefs.noParallax != 0) {
+                        mLastAppliedNoParallax = 1;
+                        applyFixedWallpaperOffset(null, mActRef.get());
+                    } else {
+                        mLastAppliedNoParallax = 0;
+                        syncWallpaperInterpolator();
+                    }
                     if (mPrefs.enabled == 0) {
                         mArmed = false;
                         mInOverviewBlur = false;
@@ -1304,6 +1318,7 @@ public final class BlurEngine {
             };
             mAppCtx.getContentResolver().registerContentObserver(
                     Settings.Secure.getUriFor(Prefs.KEY), false, cfg);
+            ensureWallpaperChangedReceiver();
             Log.i(TAG, "settings observers registered");
         } catch (Throwable t) {
             Log.e(TAG, "register observer", t);
@@ -1350,6 +1365,315 @@ public final class BlurEngine {
             }
         } catch (Throwable t) {
             Log.e(TAG, "applyForce", t);
+        }
+    }
+
+    private boolean mWallpaperHooksInstalled = false;
+    private boolean mWallpaperRxRegistered = false;
+    private WeakReference<Object> mWoiRef = new WeakReference<>(null);
+    private volatile boolean mRtlOffset = false;
+    private volatile int mLastAppliedNoParallax = -1;
+    private volatile boolean mBypassOffsetHook = false;
+
+    private boolean resolveIsRtl(Object woi) {
+        if (woi != null) {
+            try {
+                boolean r = XposedHelpers.getBooleanField(woi, "mIsRtl");
+                mRtlOffset = r;
+                return r;
+            } catch (Throwable ignore) {
+            }
+        }
+        Context c = mAppCtx;
+        Activity a = mActRef.get();
+        if (c == null && a != null) {
+            c = a;
+        }
+        if (c != null) {
+            try {
+                boolean r = c.getResources().getConfiguration().getLayoutDirection()
+                        == View.LAYOUT_DIRECTION_RTL;
+                mRtlOffset = r;
+                return r;
+            } catch (Throwable ignore) {
+            }
+        }
+        return mRtlOffset;
+    }
+
+    private float fixedOffsetX(Object woi) {
+        return resolveIsRtl(woi) ? 1.0f : 0.0f;
+    }
+
+    public void installWallpaperOffsetHook(ClassLoader cl) {
+        if (mWallpaperHooksInstalled || cl == null) {
+            return;
+        }
+        mWallpaperHooksInstalled = true;
+        try {
+            Class<?> woiCls = XposedHelpers.findClass(
+                    "com.android.launcher3.util.WallpaperOffsetInterpolator", cl);
+            XposedBridge.hookAllConstructors(woiCls, new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    mWoiRef = new WeakReference<>(param.thisObject);
+                    resolveIsRtl(param.thisObject);
+                }
+            });
+            XposedBridge.hookAllMethods(woiCls, "setWindowToken", new XC_MethodHook() {
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    mWoiRef = new WeakReference<>(param.thisObject);
+                    resolveIsRtl(param.thisObject);
+                    android.os.IBinder token = (param.args.length > 0 && param.args[0] instanceof android.os.IBinder)
+                            ? (android.os.IBinder) param.args[0] : null;
+                    if (token != null && mPrefs.noParallax != 0) {
+                        applyFixedWallpaperOffset(token, null);
+                        mMain.postDelayed(() -> applyFixedWallpaperOffset(null, mActRef.get()), 120L);
+                    }
+                }
+            });
+            XposedBridge.hookAllMethods(woiCls, "wallpaperOffsetForScroll", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    mWoiRef = new WeakReference<>(param.thisObject);
+                    if (mPrefs.noParallax == 0) {
+                        return;
+                    }
+                    boolean rtl = resolveIsRtl(param.thisObject);
+                    if (param.args != null && param.args.length == 3 && param.args[2] instanceof int[]) {
+                        int[] offsets = (int[]) param.args[2];
+                        if (offsets.length >= 2) {
+                            offsets[0] = rtl ? 1 : 0;
+                            offsets[1] = 1;
+                        }
+                        param.setResult(null);
+                    } else if (param.args != null && param.args.length == 1) {
+                        param.setResult(rtl ? 1.0f : 0.0f);
+                    }
+                }
+            });
+            Log.i(TAG, "WallpaperOffsetInterpolator hooks installed");
+        } catch (Throwable t) {
+            Log.e(TAG, "installWallpaperOffsetHook WPOI failed", t);
+        }
+
+        try {
+            Class<?> ohCls = XposedHelpers.findClass(
+                    "com.android.launcher3.util.WallpaperOffsetInterpolator$OffsetHandler", cl);
+            XposedBridge.hookAllMethods(ohCls, "handleMessage", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (mPrefs.noParallax == 0) {
+                        return;
+                    }
+                    forceFixedOffsetHandler(param.thisObject);
+                }
+
+                @Override
+                protected void afterHookedMethod(MethodHookParam param) {
+                    if (mPrefs.noParallax == 0) {
+                        return;
+                    }
+                    forceFixedOffsetHandler(param.thisObject);
+                }
+            });
+            XposedBridge.hookAllMethods(ohCls, "setOffsetSafely", new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (mPrefs.noParallax == 0) {
+                        return;
+                    }
+                    forceFixedOffsetHandler(param.thisObject);
+                }
+            });
+            mFieldCurOffset = XposedHelpers.findField(ohCls, "mCurrentOffset");
+            mFieldFinalOffset = XposedHelpers.findField(ohCls, "mFinalOffset");
+            mFieldAnimating = XposedHelpers.findField(ohCls, "mAnimating");
+            Log.i(TAG, "WallpaperOffsetInterpolator$OffsetHandler hooks installed");
+        } catch (Throwable t) {
+            Log.e(TAG, "installWallpaperOffsetHook OffsetHandler failed", t);
+        }
+
+        try {
+            java.lang.reflect.Method setOffsets = XposedHelpers.findMethodExact(
+                    android.app.WallpaperManager.class,
+                    "setWallpaperOffsets",
+                    android.os.IBinder.class, float.class, float.class);
+            XposedBridge.hookMethod(setOffsets, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (mBypassOffsetHook || mPrefs.noParallax == 0) {
+                        return;
+                    }
+                    if (param.thisObject instanceof android.app.WallpaperManager) {
+                        ((android.app.WallpaperManager) param.thisObject).setWallpaperOffsetSteps(0.0f, 1.0f);
+                    }
+                    param.args[1] = mRtlOffset ? 1.0f : 0.0f;
+                    param.args[2] = 0.5f;
+                }
+            });
+            java.lang.reflect.Method setSteps = XposedHelpers.findMethodExact(
+                    android.app.WallpaperManager.class,
+                    "setWallpaperOffsetSteps",
+                    float.class, float.class);
+            XposedBridge.hookMethod(setSteps, new XC_MethodHook() {
+                @Override
+                protected void beforeHookedMethod(MethodHookParam param) {
+                    if (mPrefs.noParallax == 0) {
+                        return;
+                    }
+                    param.args[0] = 0.0f;
+                }
+            });
+            Log.i(TAG, "WallpaperManager offset hooks installed");
+        } catch (Throwable t) {
+            Log.e(TAG, "installWallpaperOffsetHook WallpaperManager failed", t);
+        }
+    }
+
+    private java.lang.reflect.Field mFieldCurOffset;
+    private java.lang.reflect.Field mFieldFinalOffset;
+    private java.lang.reflect.Field mFieldAnimating;
+
+    private void forceFixedOffsetHandler(Object oh) {
+        if (oh == null) {
+            return;
+        }
+        float fixedX = mRtlOffset ? 1.0f : 0.0f;
+        try {
+            Object ohWm = XposedHelpers.getObjectField(oh, "mWM");
+            if (ohWm instanceof android.app.WallpaperManager) {
+                ((android.app.WallpaperManager) ohWm).setWallpaperOffsetSteps(0.0f, 1.0f);
+            }
+            if (mFieldCurOffset != null && mFieldFinalOffset != null && mFieldAnimating != null) {
+                mFieldCurOffset.setFloat(oh, fixedX);
+                mFieldFinalOffset.setFloat(oh, fixedX);
+                mFieldAnimating.setBoolean(oh, false);
+            } else {
+                XposedHelpers.setObjectField(oh, "mCurrentOffset", fixedX);
+                XposedHelpers.setObjectField(oh, "mFinalOffset", fixedX);
+                XposedHelpers.setObjectField(oh, "mAnimating", Boolean.FALSE);
+            }
+        } catch (Throwable ignore) {
+        }
+    }
+
+    private void syncWallpaperInterpolator() {
+        Object woi = mWoiRef.get();
+        if (woi != null) {
+            try {
+                java.lang.reflect.Field f = XposedHelpers.findField(woi.getClass(), "mNumScreens");
+                if (f != null) {
+                    f.setInt(woi, -1);
+                }
+            } catch (Throwable ignore) {
+            }
+            try {
+                XposedHelpers.callMethod(woi, "syncWithScroll");
+            } catch (Throwable ignore) {
+            }
+            try {
+                XposedHelpers.callMethod(woi, "jumpToFinal");
+            } catch (Throwable ignore) {
+            }
+        }
+    }
+
+    private void ensureWallpaperChangedReceiver() {
+        if (mWallpaperRxRegistered || mAppCtx == null) {
+            return;
+        }
+        mWallpaperRxRegistered = true;
+        try {
+            android.content.IntentFilter filter = new android.content.IntentFilter(
+                    android.content.Intent.ACTION_WALLPAPER_CHANGED);
+            android.content.BroadcastReceiver rx = new android.content.BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, android.content.Intent intent) {
+                    if (mPrefs.noParallax == 0) {
+                        return;
+                    }
+                    applyFixedWallpaperOffset(null, mActRef.get());
+                    mMain.postDelayed(() -> applyFixedWallpaperOffset(null, mActRef.get()), 200L);
+                }
+            };
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                mAppCtx.registerReceiver(rx, filter, Context.RECEIVER_EXPORTED);
+            } else {
+                mAppCtx.registerReceiver(rx, filter);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "register wallpaper rx failed", t);
+        }
+    }
+
+    private void applyFixedWallpaperOffset(android.os.IBinder token, Activity act) {
+        if (mPrefs.noParallax == 0) {
+            return;
+        }
+        try {
+            Object woi = mWoiRef.get();
+            float fixedX = fixedOffsetX(woi);
+            if (woi != null) {
+                try {
+                    Object oh = XposedHelpers.getObjectField(woi, "mHandler");
+                    forceFixedOffsetHandler(oh);
+                } catch (Throwable ignore) {
+                }
+            }
+            Activity liveAct = act != null ? act : mActRef.get();
+            android.os.IBinder tok = (token != null && token.isBinderAlive()) ? token : null;
+            if (tok == null && liveAct != null && !liveAct.isDestroyed() && liveAct.getWindow() != null) {
+                View decor = liveAct.getWindow().getDecorView();
+                if (decor != null && decor.isAttachedToWindow()) {
+                    android.os.IBinder dt = decor.getWindowToken();
+                    if (dt != null && dt.isBinderAlive()) {
+                        tok = dt;
+                    }
+                }
+            }
+            if (tok == null) {
+                View ws = mWorkspaceRef.get();
+                if (ws != null && ws.isAttachedToWindow()) {
+                    android.os.IBinder wt = ws.getWindowToken();
+                    if (wt != null && wt.isBinderAlive()) {
+                        tok = wt;
+                    }
+                }
+            }
+            if (tok == null && woi != null) {
+                try {
+                    Object wt = XposedHelpers.getObjectField(woi, "mWindowToken");
+                    if (wt instanceof android.os.IBinder && ((android.os.IBinder) wt).isBinderAlive()) {
+                        tok = (android.os.IBinder) wt;
+                    }
+                } catch (Throwable ignore) {
+                }
+            }
+            if (tok == null || !tok.isBinderAlive()) {
+                return;
+            }
+            Context ctx = mAppCtx;
+            if (ctx == null && liveAct != null) {
+                ctx = liveAct.getApplicationContext();
+            }
+            if (ctx == null) {
+                return;
+            }
+            android.app.WallpaperManager wm = android.app.WallpaperManager.getInstance(ctx);
+            if (wm != null) {
+                wm.setWallpaperOffsetSteps(0.0f, 1.0f);
+                mBypassOffsetHook = true;
+                try {
+                    wm.setWallpaperOffsets(tok, fixedX, 0.5001f);
+                } finally {
+                    mBypassOffsetHook = false;
+                }
+                wm.setWallpaperOffsets(tok, fixedX, 0.5f);
+            }
+        } catch (Throwable t) {
+            d("applyFixedWallpaperOffset err: " + t);
         }
     }
 

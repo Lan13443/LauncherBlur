@@ -1,19 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.operit.launcherblur"
-    android:versionCode="1"
-    android:versionName="1.0">
+    android:versionCode="3"
+    android:versionName="1.2">
+
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" />
 
     <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="34" />
 
     <application
         android:label="LauncherBlur"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher_round"
         android:allowBackup="false"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:hardwareAccelerated="true"
+        android:enableOnBackInvokedCallback="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="LauncherBlur"
+            android:icon="@drawable/ic_launcher"
+            android:roundIcon="@drawable/ic_launcher_round"
+            android:enableOnBackInvokedCallback="true"
+            android:configChanges="orientation|screenSize|uiMode"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="de.robv.android.xposed.category.MODULE_SETTINGS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity-alias
+            android:name=".LauncherActivity"
+            android:targetActivity=".MainActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:label="LauncherBlur"
+            android:icon="@drawable/ic_launcher"
+            android:roundIcon="@drawable/ic_launcher_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <meta-data android:name="xposedmodule" android:value="true" />
         <meta-data android:name="xposeddescription"
-            android:value="桌面启动/退出应用时背景实时高斯模糊（Pixel Launcher，SurfaceControl background blur）" />
+            android:value="Pixel 桌面实时高斯模糊与壁纸视差控制（内置设置界面）" />
         <meta-data android:name="xposedminversion" android:value="93" />
         <meta-data android:name="xposedscope"
             android:value="com.google.android.apps.nexuslauncher" />

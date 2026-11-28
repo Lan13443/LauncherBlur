@@ -41,6 +41,7 @@ public class LauncherBlurModule implements IXposedHookLoadPackage {
             BlurEngine engine = BlurEngine.get();
             engine.installStateHook(lpparam.classLoader);
             engine.installDepthHook(lpparam.classLoader);
+            engine.installWallpaperOffsetHook(lpparam.classLoader);
         } catch (Throwable t) {
             Log.e(TAG, "hook install failed", t);
             XposedBridge.log(t);

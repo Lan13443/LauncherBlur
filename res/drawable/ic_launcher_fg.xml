@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Back parallax wallpaper card offset slightly -->
+    <path
+        android:fillColor="#3D2C5E"
+        android:strokeColor="#9A82DB"
+        android:strokeWidth="1.6"
+        android:pathData="M34,30 L64,30 C68.42,30 72,33.58 72,38 L72,68 C72,72.42 68.42,76 64,76 L34,76 C29.58,76 26,72.42 26,68 L26,38 C26,33.58 29.58,30 34,30 Z" />
+
+    <!-- Front frosted glass launcher pane centered in safe zone -->
+    <path
+        android:fillColor="#E01C162B"
+        android:strokeColor="#D0BCFF"
+        android:strokeWidth="2.4"
+        android:pathData="M40,28 L70,28 C74.97,28 79,32.03 79,37 L79,71 C79,75.97 74.97,80 70,80 L40,80 C35.03,80 31,75.97 31,71 L31,37 C31,32.03 35.03,28 40,28 Z" />
+
+    <!-- Subtle blur halo rings inside glass pane -->
+    <path
+        android:strokeColor="#66D0BCFF"
+        android:strokeWidth="1.4"
+        android:pathData="M55,39 A13,13 0 1,1 54.99,39 Z" />
+
+    <!-- 2x2 Launcher App Icons -->
+    <path
+        android:fillColor="#F3E8FF"
+        android:pathData="M41.5,38.5 L49.5,38.5 C51.16,38.5 52.5,39.84 52.5,41.5 L52.5,49.5 C52.5,51.16 51.16,52.5 49.5,52.5 L41.5,52.5 C39.84,52.5 38.5,51.16 38.5,49.5 L38.5,41.5 C38.5,39.84 39.84,38.5 41.5,38.5 Z" />
+    <path
+        android:fillColor="#D0BCFF"
+        android:pathData="M60.5,38.5 L68.5,38.5 C70.16,38.5 71.5,39.84 71.5,41.5 L71.5,49.5 C71.5,51.16 70.16,52.5 68.5,52.5 L60.5,52.5 C58.84,52.5 57.5,51.16 57.5,49.5 L57.5,41.5 C57.5,39.84 58.84,38.5 60.5,38.5 Z" />
+    <path
+        android:fillColor="#B8A2E8"
+        android:pathData="M41.5,56.5 L49.5,56.5 C51.16,56.5 52.5,57.84 52.5,59.5 L52.5,67.5 C52.5,69.16 51.16,70.5 49.5,70.5 L41.5,70.5 C39.84,70.5 38.5,69.16 38.5,67.5 L38.5,59.5 C38.5,57.84 39.84,56.5 41.5,56.5 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M60.5,56.5 L68.5,56.5 C70.16,56.5 71.5,57.84 71.5,59.5 L71.5,67.5 C71.5,69.16 70.16,70.5 68.5,70.5 L60.5,70.5 C58.84,70.5 57.5,69.16 57.5,67.5 L57.5,59.5 C57.5,57.84 58.84,56.5 60.5,56.5 Z" />
+
+    <!-- Bottom dock blur bar -->
+    <path
+        android:fillColor="#99D0BCFF"
+        android:pathData="M43,73.5 L67,73.5 C68.1,73.5 69,74.4 69,75.5 C69,76.6 68.1,77.5 67,77.5 L43,77.5 C41.9,77.5 41,76.6 41,75.5 C41,74.4 41.9,73.5 43,73.5 Z" />
+</vector>
